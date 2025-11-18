@@ -1,0 +1,70 @@
+// Checkpoint 5 README
+// Name: Yunzhe Jiang, Mingyuan Sun
+// NetID: yj257, ms1347
+
+// Design Description
+// In Checkpoint 5, we extended our CP4 single-cycle processor so it can now
+// correctly run all remaining control-flow instructions, including:
+//   J, JAL, JR, BNE, BLT, SETX, and BEX.
+// This required adding new decoding logic, expanding the read-port mapping for
+// the regfile, building a full next-PC selection chain, and extending writeback
+// logic for JAL and SETX.
+//
+//What has added in CP5 based on CP4
+// 1. Full Instruction Decode
+//    We added explicit decode signals for all CP5 instructions and reorganized
+//    the opcode logic so each instruction has a clean, non-overlapping pattern.
+//    This helped avoid the decoding conflicts we ran into earlier.
+//
+// 2. Regfile Read Logic Improvements
+//    CP5 instructions sometimes need different register operands than CP4.
+//    For example:
+//      • BNE / BLT compare rs and rt, but rd must also be in the right read port.
+//      • JR should read from rd instead of the default rs.
+//      • BEX must read register 30.
+//    To handle all of this, we created small mux chains that generate:
+//      ctrl_readRegA and ctrl_readRegB
+//    based on the instruction type.
+//
+// 3. Complete Branch / Jump PC Logic
+//    We used a second ALU to compute branch_target = PC+1+imm for BNE/BLT.
+//    Then we built a step-by-step PC selection chain:
+//
+//       branch → j → jal → jr → bex → default PC+1
+//
+//    This guarantee the correct priority among all control-flow instructions.
+//    We also removed older CP4 PC logic to avoid multiple-driver errors and
+//    now route everything into a single pc_next signal.
+//
+// 4. Extended Writeback Logic
+//    CP5 introduces new writeback cases:
+//      • JAL writes PC+1 into r31
+//      • SETX writes the target field into r30
+//      • Overflow exceptions still write into r30
+//    We combined them into a clean sequence:
+//       writeReg = exc ? r30 : setx ? r30 : jal ? r31 : rd
+//       writeData = exc? rstatus : setx? target : jal? pc_plus1 : normal_wb
+//    This keeps the writeback path consistent and prevents multiple drivers.
+//
+// 5. BEX Handling
+//    BEX jumps when rstatus != 0.  
+//    So we force ctrl_readRegA = 30 and choose target_T as next PC when taken.
+//
+// 6. Integration with the CP4 System
+//    We keep the same divided-clock scheme from CP4:
+//      • processor and regfile run at clk_div4
+//      • dmem uses clk_div2
+//      • imem uses the base 50 MHz clock
+//    This avoids race conditions and keeps the design stable for simulation.
+//
+//Issues We Encountered
+// • OpCode patterns initially didn’t match the spec; fixing these solved many
+//   incorrect behaviors.
+// • PC logic originally caused multiple-driver synthesis errors; resolving this
+//   required fully merging all PC paths.
+// • Incorrect regfile read-port selection caused ALU comparison bugs in BNE/BLT.
+// • Waveform debugging helped confirm PC updates and register writes for every
+//   control-flow combination.
+//
+// Our CP5 processor synthesizes cleanly, runs correctly in waveform tests, and
+// is fully compatible with the CP4 skeleton and memory modules.
